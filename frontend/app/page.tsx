@@ -173,14 +173,39 @@ export default function Home() {
     setSourcesBusy(true);
     setSourcesMsg("Indexation en cours…");
     try {
-      await api.syncConnector(connectorId);
-      await loadStatus();
-      setSourcesMsg("Documents indexés avec succès.");
+      const syncRun = await api.syncConnector(connectorId);
+      // Interroge le statut toutes les 3 secondes jusqu'à la fin
+      let attempts = 0;
+      const poll = async (): Promise<void> => {
+        attempts++;
+        if (attempts > 60) {
+          setSourcesMsg("Indexation en cours en arrière-plan.");
+          setSourcesBusy(false);
+          return;
+        }
+        try {
+          const runs = await api.syncRuns(connectorId);
+          const current = runs.find((r) => r.id === syncRun.id);
+          if (current?.status === "succeeded") {
+            await loadStatus();
+            setSourcesMsg("Documents indexés avec succès.");
+            setSourcesBusy(false);
+          } else if (current?.status === "failed") {
+            await loadStatus();
+            setSourcesMsg(`Échec de l'indexation : ${current.error_message ?? "erreur inconnue"}`);
+            setSourcesBusy(false);
+          } else {
+            setTimeout(() => void poll(), 3000);
+          }
+        } catch {
+          setTimeout(() => void poll(), 3000);
+        }
+      };
+      setTimeout(() => void poll(), 3000);
     } catch (error) {
       await loadStatus();
       const msg = error instanceof Error ? error.message : "Mise à jour impossible.";
       setSourcesMsg(`Échec de l'indexation : ${msg}`);
-    } finally {
       setSourcesBusy(false);
     }
   }

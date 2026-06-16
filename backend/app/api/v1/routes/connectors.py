@@ -1,11 +1,12 @@
+import asyncio
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
 from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.security import Principal, get_current_principal
-from app.db.session import get_db_session
+from app.db.session import AsyncSessionLocal, get_db_session
 from app.models.connector import Connector
 from app.models.document import Chunk, Document, DocumentACL
 from app.models.sync_run import SyncRun
@@ -127,10 +128,25 @@ async def delete_connector(
     await db.commit()
 
 
+async def _run_sync_background(sync_run_id: UUID, connector_id: UUID) -> None:
+    async with AsyncSessionLocal() as db:
+        try:
+            connector = await db.get(Connector, connector_id)
+            if connector is None:
+                return
+            sync_run = await db.get(SyncRun, sync_run_id)
+            if sync_run is None:
+                return
+            await IngestionPipeline(db).sync_connector(connector, sync_run)
+        except Exception:
+            pass
+
+
 @router.post("/{connector_id}/sync", response_model=SyncRunRead)
 async def sync_connector(
     connector_id: UUID,
     payload: SyncRequest,
+    background_tasks: BackgroundTasks,
     db: AsyncSession = Depends(get_db_session),
     principal: Principal = Depends(get_current_principal),
 ) -> SyncRunRead:
@@ -138,11 +154,8 @@ async def sync_connector(
     if connector is None or connector.tenant_id != principal.tenant_id:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Connector not found")
 
-    if payload.mode == "rq":
-        sync_run = await IngestionPipeline(db).create_sync_run(connector)
-        await db.commit()
-        enqueue_sync(str(sync_run.id), str(connector.id))
-        return SyncRunRead.model_validate(sync_run)
-
-    sync_run = await IngestionPipeline(db).sync_connector(connector)
+    # Crée le sync_run et retourne immédiatement — la synchronisation s'exécute en arrière-plan
+    sync_run = await IngestionPipeline(db).create_sync_run(connector)
+    await db.commit()
+    background_tasks.add_task(_run_sync_background, sync_run.id, connector_id)
     return SyncRunRead.model_validate(sync_run)

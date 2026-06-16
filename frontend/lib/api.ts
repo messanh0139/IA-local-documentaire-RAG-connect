@@ -101,8 +101,8 @@ export const api = {
   syncConnector: (connectorId: string) =>
     request<SyncRun>(`/connectors/${connectorId}/sync`, {
       method: "POST",
-      body: JSON.stringify({ mode: "foreground" })
-    }, 5 * 60_000),
+      body: JSON.stringify({ mode: "background" })
+    }),
   syncRuns: (connectorId: string) => request<SyncRun[]>(`/connectors/${connectorId}/sync-runs`),
   documents: () => request<DocumentItem[]>("/documents?limit=100"),
   uploadDocument: async (file: File): Promise<DocumentItem> => {

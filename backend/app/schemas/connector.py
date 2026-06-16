@@ -28,7 +28,7 @@ class ConnectorRead(BaseModel):
 
 
 class SyncRequest(BaseModel):
-    mode: Literal["foreground", "rq"] = "foreground"
+    mode: Literal["foreground", "rq", "background"] = "background"
 
 
 class SyncRunRead(BaseModel):
