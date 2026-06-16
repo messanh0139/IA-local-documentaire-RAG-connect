@@ -1,0 +1,13 @@
+# Copy this file to docker-compose.override.yml and replace the Windows path
+# with the company folder you want to demonstrate.
+#
+# Example:
+#   C:/Users/Admin/Documents/DeepBleueDemo:/data/local-docs:ro
+#
+# The backend only sees /data/local-docs. In the UI, create a local connector
+# with root path: /data/local-docs
+
+services:
+  backend:
+    volumes:
+      - C:/Users/Admin/Documents/DeepBleueDemo:/data/local-docs:ro
